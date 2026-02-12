@@ -5,13 +5,15 @@
   <img src="https://img.shields.io/badge/DuckDB-1.1%2B-FFF000?style=for-the-badge&logo=duckdb&logoColor=black" />
   <img src="https://img.shields.io/badge/Apache%20Arrow-15%2B-E34F26?style=for-the-badge&logo=apache&logoColor=white" />
   <img src="https://img.shields.io/badge/Apache%20Iceberg-0.7%2B-4A90D9?style=for-the-badge&logo=apache&logoColor=white" />
+  <img src="https://img.shields.io/badge/marimo-Dashboard-10b981?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTMgM2gxOHYxOEgzeiIvPjwvc3ZnPg==&logoColor=white" />
+  <img src="https://img.shields.io/badge/Windows%2011-Desktop%20EXE-0078D4?style=for-the-badge&logo=windows11&logoColor=white" />
 </p>
 
 # Flight Streaming Pipeline
 
 > **DataDesigner &rarr; NDJSON Stream &rarr; Apache Arrow &rarr; DuckDB &rarr; Apache Iceberg**
 
-A fully tested, end-to-end streaming pipeline that generates synthetic flight arrival and departure data following [NVIDIA NeMo DataDesigner](https://nvidia-nemo.github.io/DataDesigner/latest/) patterns, streams it as newline-delimited JSON, ingests via Apache Arrow zero-copy into DuckDB, and catalogs it in Apache Iceberg with snapshot-based version control.
+A fully tested, end-to-end streaming pipeline that generates synthetic flight arrival and departure data following [NVIDIA NeMo DataDesigner](https://nvidia-nemo.github.io/DataDesigner/latest/) patterns, streams it as newline-delimited JSON, ingests via Apache Arrow zero-copy into DuckDB, and catalogs it in Apache Iceberg with snapshot-based version control. Includes an interactive [marimo](https://marimo.io/) on-time performance dashboard and a distributable Windows 11 desktop executable.
 
 Diagrams styled with [**beautiful-mermaid**](https://github.com/lukilabs/beautiful-mermaid).
 
@@ -25,6 +27,8 @@ Diagrams styled with [**beautiful-mermaid**](https://github.com/lukilabs/beautif
 - [Sequence Diagram — Pipeline Execution](#sequence-diagram--pipeline-execution)
 - [Class Diagram](#class-diagram)
 - [Entity-Relationship Diagram](#entity-relationship-diagram)
+- [Interactive Dashboard](#interactive-dashboard)
+- [Desktop Distribution (Windows EXE)](#desktop-distribution-windows-exe)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Running Tests](#running-tests)
@@ -415,12 +419,107 @@ erDiagram
 
 ---
 
+## Interactive Dashboard
+
+An interactive [marimo](https://marimo.io/) notebook that visualises on-time performance across the generated flight data. All charts react instantly to filter changes — no page reloads.
+
+### Launch
+
+```bash
+# Interactive mode (editable cells)
+marimo edit dashboard.py
+
+# Read-only presentation mode
+marimo run dashboard.py
+```
+
+### KPI Definition
+
+> A flight is **on-time** if `delay_minutes ≤ 15`.
+
+### Features
+
+| Component | Description |
+|-----------|-------------|
+| **KPI Cards** | Total flights, OTP %, average delay, max delay, cancellations — colour-coded green / amber / red |
+| **Airline Filter** | Multi-select dropdown — filter all charts by one or more airlines |
+| **Route Filter** | Multi-select dropdown — filter by origin → destination pairs |
+| **OTP by Airline** | Vertical bar chart, colour-scaled by performance |
+| **Delay Distribution** | Donut chart — On Time (0 min), Minor (1–15), Moderate (16–60), Severe (>60) |
+| **OTP by Hour** | Area chart with 80 % target line — shows performance across the 24-hour schedule |
+| **Bottom 20 Routes** | Horizontal bar chart of worst-performing routes (minimum 3 flights) |
+| **Flight Detail Table** | Sortable, searchable table of up to 200 flights with ✅ / ❌ on-time indicator |
+
+### Data Pipeline
+
+On startup the dashboard generates **2,000 synthetic flights** using the existing pipeline:
+
+```
+FlightDataGenerator(seed=2026)
+    → stream_to_buffer()
+    → ndjson_buffer_to_arrow()
+    → arrow_to_duckdb()
+    → CREATE TABLE flights_otp (with computed is_ontime, route, delay_bucket, sched_hour)
+```
+
+All queries use **parameterised SQL** (`?` placeholders) for safe filter injection into DuckDB.
+
+---
+
+## Desktop Distribution (Windows EXE)
+
+A PyInstaller-built Windows executable that launches the dashboard as a standalone desktop application — double-click to run, no terminal commands needed.
+
+### Build
+
+```cmd
+:: One-click build
+build_exe.bat
+
+:: Or manually
+pyinstaller FlightOTPDashboard.spec --noconfirm
+```
+
+**Output:** `dist\FlightOTPDashboard\FlightOTPDashboard.exe`
+
+### How It Works
+
+```
+FlightOTPDashboard.exe
+  │
+  ├─ Detects system Python (py -3 → python → python3)
+  ├─ Copies bundled dashboard.py + src/ to temp workspace
+  ├─ Starts  marimo run  on a random free port (--headless)
+  ├─ Polls until the server responds (up to 30 s)
+  ├─ Opens the default browser at http://127.0.0.1:<port>
+  ├─ Streams server logs to the console window
+  └─ Ctrl+C or close window → graceful shutdown + temp cleanup
+```
+
+### Prerequisites on Target Machine
+
+```bash
+pip install marimo plotly duckdb pyarrow faker pydantic
+```
+
+The exe bundles the dashboard code and source modules but delegates to the system Python for the marimo server runtime.
+
+### Distribution
+
+Zip the entire `dist\FlightOTPDashboard\` folder and share it. Recipients need Python 3.10+ with the packages above.
+
+---
+
 ## Project Structure
 
 ```
 flight-streaming-pipeline/
 ├── pyproject.toml                          # Build config, pytest markers
 ├── requirements.txt                        # Pinned dependencies
+├── dashboard.py                            # marimo interactive OTP dashboard
+├── launcher.py                             # Desktop exe entry-point
+├── FlightOTPDashboard.spec                 # PyInstaller build spec
+├── build_exe.bat                           # One-click Windows build script
 ├── src/
 │   ├── generators/
 │   │   ├── models.py                       # FlightRecord, FlightStatus, FlightType
@@ -438,6 +537,9 @@ flight-streaming-pipeline/
 │   ├── feature_3_arrow_ingestion/          # 15 tests — Arrow load, DuckDB queries, fidelity
 │   ├── feature_4_iceberg_catalog/          # 16 tests — catalog CRUD, snapshots, scans
 │   └── feature_5_e2e_regression/           # 12 tests — full pipeline, determinism, integrity
+├── dist/                                   # PyInstaller output (gitignored)
+│   └── FlightOTPDashboard/
+│       └── FlightOTPDashboard.exe          # Desktop executable
 └── data/
     ├── raw/                                # Generated NDJSON files (gitignored)
     └── iceberg/                            # Iceberg warehouse (gitignored)
@@ -460,7 +562,13 @@ cd flight-streaming-pipeline
 pip install -r requirements.txt
 ```
 
-### Quick Run
+### Launch Dashboard
+
+```bash
+marimo run dashboard.py
+```
+
+### Quick Run (Python API)
 
 ```python
 from src.generators.flight_generator import FlightDataGenerator
