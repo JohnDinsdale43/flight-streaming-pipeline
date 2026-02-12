@@ -39,3 +39,7 @@ Thumbs.db
 # Iceberg warehouse (test artifacts)
 **/iceberg_warehouse/
 **/catalog.db
+
+# PyInstaller
+*.manifest
+*.spec.bak
